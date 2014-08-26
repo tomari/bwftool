@@ -23,6 +23,10 @@ my $usage=<<'EOL';
     <bwfinput> can be either extracted BWF info or another WAV file
     WARNING: <output.wav> is modified
 
+  % bwftool.pl vorbis <input.wav>
+    Export some of BWF metadata to Vorbis comment field.
+    This format is suitable for use with metaflac for FLAC.
+
 EOL
 
 my $quiet=1;
@@ -188,8 +192,39 @@ sub copybwf {
   move($tmppath,$datasrc);
 }
 
+sub escape_crlf {
+  my $x=shift;
+  $x =~ s/\r//g;
+  $x =~ s/\n/\\n/g;
+  return $x;
+}
+
+sub bwfDateTime_to_ISO8601 {
+  my ($D, $T)=@_;
+  my $res="";
+  if(length($D)>0) {
+    $res.=substr($D,0,4).'-'.substr($D,5,2).'-'.substr($D,8,2);
+  }
+  if(length($T)>0) {
+    $res.='T' if(length($res)>0);
+    $res.=substr($T,0,2).':'.substr($T,3,2).':'.substr($T,6,2);
+  }
+  return $res;
+}
+
+sub bwf2vorbis {
+  my $bext_body=shift;
+  my $d=decode_bwfbody($bext_body);
+  print 'SOURCEMEDIA='.escape_crlf($d->{'Originator'})."\n" if(length($d->{'Originator'})>0);
+  print 'ENCODING='.escape_crlf($d->{'CodingHistory'})."\n" if(length($d->{'CodingHistory'})>0);
+  print 'COMMENT='.escape_crlf($d->{'Description'})."\n" if(length($d->{'Description'})>0);
+  if(length($d->{'OriginationDate'})>0 || length($d->{'OriginationTime'})>0) {
+    print 'DATE='.bwfDateTime_to_ISO8601($d->{'OriginationDate'},$d->{'OriginationTime'})."\n";
+  }
+}
+
 sub run {
-  if(@ARGV>0 && $ARGV[0] eq "-v") { $quiet=0; }
+  if(@ARGV>0 && $ARGV[0] eq "-v") { $quiet=0; shift @ARGV; }
   if(@ARGV<1) {
     return -1;
   } elsif($ARGV[0] eq "dump" && 2==@ARGV) {
@@ -198,6 +233,8 @@ sub run {
     return handlebwf($ARGV[1],\&extractbwf,$ARGV[2]);
   } elsif($ARGV[0] eq "copy" && 3==@ARGV) {
     return copybwf($ARGV[1],$ARGV[2]);
+  } elsif($ARGV[0] eq "vorbis" && 2==@ARGV) {
+    return handlebwf($ARGV[1],\&bwf2vorbis);
   } else {
     return -1;
   }
