@@ -7,23 +7,27 @@ use Fcntl;
 use JSON::PP;
 use File::Temp qw/ tempfile /;
 use File::Copy;
-my $usage=<<'EOL';
+my $myname='bwftool.pl';
+my $usage=<<"EOL";
  bwftool - BWF (Broadcast Wave Format) header tool
-
+ Version 1
  usage:
 
-  % bwftool.pl dump <input.wav>
+  % $myname [show] <input.wav>
+    Pretty-print BWF metadata in the input
+
+  % $myname dump <input.wav>
     Dump BWF information in JSON format
 
-  % bwftool.pl extract <input.wav> <output>
+  % $myname extract <input.wav> <output>
     Extract BWF metadata to a file
 
-  % bwftool.pl copy <bwfinput> <output.wav>
+  % $myname copy <bwfinput> <output.wav>
     Copy BWF header on <bwfinput> to <output.wav>
     <bwfinput> can be either extracted BWF info or another WAV file
     WARNING: <output.wav> is modified
 
-  % bwftool.pl vorbis <input.wav>
+  % $myname vorbis <input.wav>
     Export some of BWF metadata to Vorbis comment field.
     This format is suitable for use with metaflac for FLAC.
 
@@ -120,9 +124,15 @@ sub handlebwf {
   return 0;
 }
 
-sub dumpbwf {
+sub handleDecode {
   my $bext_body=shift;
+  my $funp=shift;
   my $decoded=decode_bwfbody($bext_body);
+  $funp->($decoded);
+}
+
+sub dumpbwf {
+  my $decoded=shift;
   print JSON::PP->new->ascii->pretty->encode($decoded);
 }
 
@@ -212,9 +222,9 @@ sub bwfDateTime_to_ISO8601 {
   return $res;
 }
 
+# Vorbis Recommendations: http://age.hobba.nl/audio/mirroredpages/ogg-tagging.html
 sub bwf2vorbis {
-  my $bext_body=shift;
-  my $d=decode_bwfbody($bext_body);
+  my $d=shift;
   print 'SOURCEMEDIA='.escape_crlf($d->{'Originator'})."\n" if(length($d->{'Originator'})>0);
   print 'ENCODING='.escape_crlf($d->{'CodingHistory'})."\n" if(length($d->{'CodingHistory'})>0);
   print 'COMMENT='.escape_crlf($d->{'Description'})."\n" if(length($d->{'Description'})>0);
@@ -223,18 +233,64 @@ sub bwf2vorbis {
   }
 }
 
+sub loudness_to_s {
+  my $x=shift;
+  my $divd=$x/100.;
+  return sprintf("%.2f",$divd);
+}
+
+sub showbwf {
+  my $d=shift;
+  my $timeref=4294967296*$d->{'TimeReferenceHigh'}+$d->{'TimeReferenceLow'};
+  print << "EOL";
+Description          : $d->{Description}
+Originator           : $d->{Originator}
+OriginatorReference  : $d->{OriginatorReference}
+OriginationDate      : $d->{OriginationDate}
+OriginationTime      : $d->{OriginationTime}
+TimeReference        : $timeref
+Version              : $d->{Version}
+EOL
+  goto showCH if($quiet && $d->{'Version'}<1);
+  print "UMID                 :";
+  for(my $i=0; $i<64; $i++) {
+    print ' ' if(0==($i&0x3));
+    printf("%02X",$d->{'UMID'}->[$i]);
+  }
+  print "\n";
+  goto showCH if($quiet && $d->{'Version'}<2);
+  my $LoudnessValue=loudness_to_s($d->{'LoudnessValue'});
+  my $LoudnessRange=loudness_to_s($d->{'LoudnessRange'});
+  my $MaxTruePeakLevel=loudness_to_s($d->{'MaxTruePeakLevel'});
+  my $MaxMomentaryLoudness=loudness_to_s($d->{'MaxMomentaryLoudness'});
+  my $MaxShortTermLoudness=loudness_to_s($d->{'MaxShortTermLoudness'});
+  print << "EOL";
+LoudnessValue        : $LoudnessValue LUFS
+LoudnessRange        : $LoudnessRange LU
+MaxTruePeakLevel     : $MaxTruePeakLevel dBTP
+MaxMomentaryLoudness : $MaxMomentaryLoudness LUFS
+MaxShortTermLoudness : $MaxShortTermLoudness LUFS
+EOL
+ showCH:
+  print "CodingHistory        : ".$d->{'CodingHistory'}."\n";
+  return 0;
+}
+
 sub run {
   if(@ARGV>0 && $ARGV[0] eq "-v") { $quiet=0; shift @ARGV; }
   if(@ARGV<1) {
     return -1;
   } elsif($ARGV[0] eq "dump" && 2==@ARGV) {
-    return handlebwf($ARGV[1],\&dumpbwf);
+    return handlebwf($ARGV[1],\&handleDecode,\&dumpbwf);
   } elsif($ARGV[0] eq "extract" && 3==@ARGV) {
     return handlebwf($ARGV[1],\&extractbwf,$ARGV[2]);
   } elsif($ARGV[0] eq "copy" && 3==@ARGV) {
     return copybwf($ARGV[1],$ARGV[2]);
   } elsif($ARGV[0] eq "vorbis" && 2==@ARGV) {
-    return handlebwf($ARGV[1],\&bwf2vorbis);
+    return handlebwf($ARGV[1],\&handleDecode,\&bwf2vorbis);
+  } elsif(($ARGV[0] eq 'show' && 2==@ARGV) ||
+	 (@ARGV==1 && -s $ARGV[0])) {
+    return handlebwf($ARGV[$#ARGV],\&handleDecode,\&showbwf);
   } else {
     return -1;
   }
