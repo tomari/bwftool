@@ -31,6 +31,8 @@ my $usage=<<"EOL";
     Export some of BWF metadata to Vorbis comment field.
     This format is suitable for use with metaflac for FLAC.
 
+  % $myname remove <input.wav>
+    Removes BWF metadata from input. The input is modified in-place.
 EOL
 
 my $quiet=1;
@@ -149,9 +151,12 @@ sub extractbwf_with_fh {
   my ($bext_body, $fh)=@_;
   # RIFF length= "WAVEbext...." + body length
   my $rifflen=12+length($bext_body);
-  my $buf=pack("a4Va8V","RIFF",$rifflen,"WAVEbext",length($bext_body));
+  my $buf=pack("a4Va4",'RIFF',$rifflen,'WAVE');
   print $fh $buf or die "cannot write: $!";
-  print $fh $bext_body or die "cannot write: $!";
+  if(length($bext_body)>0) {
+    print $fh pack("a4V",'bext',length($bext_body));
+    print $fh $bext_body or die "cannot write: $!";
+  }
   return;
 }
 
@@ -176,7 +181,11 @@ sub copybwf {
   binmode($tmp);
   # First copy bext from src to tmp
   $quiet or print STDERR "Tmp file= ".$tmppath."\n";
-  handlebwf($bwfsrc,\&extractbwf_with_fh,$tmp);
+  if(defined($bwfsrc)) {
+    handlebwf($bwfsrc,\&extractbwf_with_fh,$tmp);
+  } else {
+    extractbwf_with_fh("",$tmp);
+  }
   # Second copy non-bext chunks from dest to tmp
   open(my $dest, '<', $datasrc) or die "cannot read destination file: $!";
   binmode($dest);
@@ -291,6 +300,8 @@ sub run {
   } elsif(($ARGV[0] eq 'show' && 2==@ARGV) ||
 	 (@ARGV==1 && -s $ARGV[0])) {
     return handlebwf($ARGV[$#ARGV],\&handleDecode,\&showbwf);
+  } elsif($ARGV[0] eq 'remove' && 2==@ARGV) {
+    return copybwf(undef,$ARGV[1]);
   } else {
     return -1;
   }
