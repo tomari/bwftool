@@ -1,0 +1,23 @@
+#!/bin/sh
+# Generates mp4tags command sequence from BWF info
+# usage: bwf2mp4tags input.wav
+#    ==> sets tags of input.mp4 using info of input.wav
+bwftool='bwftool.pl'  #### MODIFY HERE ###
+mp4tags='mp4tags'
+bwfout=`${bwftool} show "$1"`
+bn=`echo "$1" | sed 's/\.wav//ig'`
+mp4nam="${bn}.mp4"
+
+descr=`echo "$bwfout" | grep '^Description' | cut -c 24-`
+if [ "x$descr" != 'x' ] ; then
+	mp4tags -m "$descr" "$mp4nam"
+fi
+codinghistory=`echo "$bwfout" | grep '^CodingHistory' | cut -c 24-`
+if [ "x$codinghistory" != 'x' ] ; then
+        mp4tags -c "$codinghistory" "$mp4nam"
+fi
+year=`echo "$bwfout" | grep '^OriginationDate' | cut -c 24-27`
+if [ "x$year" != 'x' ] ; then
+	mp4tags -y "$year" "$mp4nam"
+fi
+
