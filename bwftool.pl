@@ -99,7 +99,7 @@ sub decode_bwfbody {
 sub handlebwf {
   my $path=shift;
   my $funp=shift;
-  open(my $fh,'<', $path) or die "$!";
+  open(my $fh,'<', $path) or die "cannot open $path: $!";
   binmode($fh);
   my $riff_len=find_chunk($fh,"RIFF");
   if($riff_len==0 || !detect_wave($fh)) {

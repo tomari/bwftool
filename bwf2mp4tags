@@ -1,8 +1,8 @@
-#!/bin/sh
+#!/bin/bash -e
 # Generates mp4tags command sequence from BWF info
 # usage: bwf2mp4tags input.wav
 #    ==> sets tags of input.mp4 using info of input.wav
-bwftool='bwftool.pl'  #### MODIFY HERE ###
+bwftool="$(dirname $0)/bwftool.pl"  #### MODIFY HERE ###
 mp4tags='mp4tags'
 bwfout=`${bwftool} show "$1"`
 bn=`echo "$1" | sed 's/\.wav//ig'`
