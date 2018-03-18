@@ -1,5 +1,7 @@
 # bwftool (Broadcast Wave Format metadata tool)
 
+[![CircleCI](https://circleci.com/gh/tomari/bwftool.svg?style=svg)](https://circleci.com/gh/tomari/bwftool)
+
 Public domain.
 
 ## usage
